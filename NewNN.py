@@ -2,7 +2,7 @@ import numpy as np
 from keras import backend as K
 from keras.models import Sequential
 from keras.layers.core import Flatten, Reshape, Permute
-from keras.layers import TimeDistributed, Conv2D, Dense, Dropout, Activation, LSTM, MaxPooling2D, GRU, ConvLSTM2D
+from keras.layers import TimeDistributed, Conv2D, Dense, Dropout, Activation, LSTM, MaxPooling2D, GRU, ConvLSTM2D, Bidirectional
 from keras.preprocessing.image import ImageDataGenerator
 from sklearn.metrics import classification_report, confusion_matrix
 from keras.layers.normalization import BatchNormalization
@@ -12,11 +12,11 @@ train_data_path = './data/train'
 test_data_path = './data/validation'
 img_rows = 255
 img_cols = 56
-epochs = 10
-batch_size = 15
-num_of_train_samples = 750
-num_of_test_samples = 250
-convFilter1 = 64
+epochs = 40
+batch_size = 30
+num_of_train_samples = 366
+num_of_test_samples = 144
+convFilter1 = 128
 
 input_shape = (img_rows, img_cols, 1)
 
@@ -48,29 +48,31 @@ model.add(Conv2D(filters=32,
                  strides=1))
 
 model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(.25))
 
-model.add(Conv2D(filters=convFilter1,
+model.add(Conv2D(filters=64,
                  kernel_size=(3,3),
+                 input_shape=input_shape,
                  padding='valid',
                  activation='tanh',
                  strides=1))
 
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(.20))
+
+model.add(Conv2D(filters=convFilter1,
+                 kernel_size=(5,5),
+                 padding='valid',
+                 activation='tanh',
+                 strides=1))
+
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(.15))
+
 model.add(Reshape((convFilter1,-1)))
 model.add(Permute((2,1)))
-#for x in train_generator:
-#              print(x[0].reshape((191,)))
-
-#model.add(Reshape((None, 191,), input_shape=(1,1,1,191,1))) 
-#model.add(ConvLSTM2D(filters=16, kernel_size=(1,7), padding='valid', activation='tanh'))
-model.add(LSTM(128))
-#model.add(Flatten())
-
-#print(cnn.layers[-1].output_shape)
-
-#model = Sequential()
-#model.add(TimeDistributed(cnn, input_shape=cnn.layers[-1].output_shape))
-#model.add(LSTM(16))
-#model.add(Dense(32, activation='tanh'))
+model.add(Bidirectional(LSTM(128)))
+#model.add(LSTM(64))
 model.add(Dense(5, activation='softmax'))
 
 model.summary()
