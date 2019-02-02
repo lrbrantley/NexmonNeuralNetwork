@@ -1,7 +1,7 @@
 #! /bin/bash
 
-for file in ./*.png; do
-	#echo $file
-	python3 imageChange.py $file
+for file in ../data/*/*/*.png; do
+	echo $file
+	python3 imageMakeSmallerSnapshots.py $file
 	rm $file
 done
