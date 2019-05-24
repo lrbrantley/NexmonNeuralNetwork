@@ -42,7 +42,8 @@ def data_generator(args, directory):
                                              class_mode='categorical')
 
 def parse_args():
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-r', '--rows', default=400, type=int,
                         help='Number of rows per image')
     parser.add_argument('-c', '--cols', default=56, type=int,
@@ -51,10 +52,10 @@ def parse_args():
                         help='Number of training iterations')
     parser.add_argument('-b', '--batch', default=30, type=int,
                         help='Size of a training batch')
-    parser.add_argument('-1', '--convelution1', default=32, type=int,
-                        help='Number of convelutional layers')
-    parser.add_argument('-2', '--convelution2', default=128, type=int,
-                        help='Number of convelutional layers')
+    parser.add_argument('-1', '--convolution1', default=32, type=int,
+                        help='Number of convolutional layers')
+    parser.add_argument('-2', '--convolution2', default=128, type=int,
+                        help='Number of convolutional layers')
     parser.add_argument('-o', '--color', action='store_true',
                         help='Data is color image')
     parser.add_argument('data_path', nargs='?',
@@ -86,41 +87,43 @@ validation_generator = data_generator(args, test_dir_path)
 # Build model
 model = Sequential()
 
-model.add(Conv2D(filters=args.convelution1,
-                 kernel_size=(5,5),
+model.add(Conv2D(filters=args.convolution1,
+                 kernel_size=(5,5),# TODO: Parameterize
                  input_shape=input_shape,
                  padding='valid',
-                 activation='tanh',
+                 activation='tanh',# TODO: Parameterize
                  strides=1))
 
-model.add(MaxPooling2D(pool_size=(2,2)))
-model.add(Dropout(.15))
+model.add(MaxPooling2D(pool_size=(2,2)))# TODO: Parameterize
+model.add(Dropout(.15))# TODO: Parameterize
 
-model.add(Conv2D(filters=args.convelution2,
-                 kernel_size=(5,5),
+model.add(Conv2D(filters=args.convolution2,
+                 kernel_size=(5,5),# TODO: Parameterize
                  padding='valid',
-                 activation='tanh',
+                 activation='tanh',# TODO: Parameterize
                  strides=1))
 
-model.add(MaxPooling2D(pool_size=(2,2)))
-model.add(Dropout(.10))
+model.add(MaxPooling2D(pool_size=(2,2)))# TODO: Parameterize
+model.add(Dropout(.10))# TODO: Parameterize
 
-model.add(Reshape((args.convelution2,-1)))
+model.add(Reshape((args.convolution2,-1)))
 model.add(Permute((2,1)))
-model.add(Bidirectional(LSTM(128)))
-model.add(Dense(5, activation='softmax'))
+model.add(Bidirectional(LSTM(128)))# TODO: Parameterize
+model.add(Dense(len(bins)), activation='softmax'))
 
 model.summary()
 
 model.compile(loss='categorical_crossentropy',
-              optimizer='rmsprop',
+              optimizer='rmsprop',# TODO: Parameterize
               metrics=['accuracy'])
 
 filepath="weights.best.hdf5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1,
+                             save_best_only=True, mode='max')
 callbacks_list=[checkpoint]
 
-plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
+plot_model(model, to_file='model_plot.png', show_shapes=True,
+           show_layer_names=True)
 
 #Train
 history = model.fit_generator(train_generator,
