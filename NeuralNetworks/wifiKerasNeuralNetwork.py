@@ -1,8 +1,11 @@
+#!/usr/bin/python
+
 import numpy as np
 from keras import backend as K
 from keras.models import Sequential
 from keras.layers.core import Flatten, Reshape, Permute
-from keras.layers import TimeDistributed, Conv2D, Dense, Dropout, Activation, LSTM, MaxPooling2D, GRU, ConvLSTM2D, Bidirectional
+from keras.layers import TimeDistributed, Conv2D, Dense, Dropout, Activation, \
+    LSTM, MaxPooling2D, GRU, ConvLSTM2D, Bidirectional
 from keras.preprocessing.image import ImageDataGenerator
 from sklearn.metrics import classification_report, confusion_matrix
 from keras.layers.normalization import BatchNormalization
@@ -10,41 +13,80 @@ from keras.callbacks import ModelCheckpoint
 from keras.utils.vis_utils import plot_model
 import matplotlib.pyplot as plt
 from keras.layers.normalization import BatchNormalization
+import sys
+import os
+import argparse
+
+def train_dir(data_dir):
+    return '%s/train' % data_dir
+
+def test_dir(data_dir):
+    return '%s/validation' % data_dir
+
+def color_mode(b):
+    return 'rgb' if b else 'grayscale'
+
+def data_dir_path(string):
+    if not os.path.isdir(train_dir(string)):
+        raise NotADirectoryError(train_dir(string))
+    elif not os.path.isdir(test_dir(string)):
+        raise NotADirectoryError(test_dir(string))
+    else:
+        return string
+
+def data_generator(args, directory):
+    return train_datagen.flow_from_directory(directory,
+                                             color_mode=color_mode(args.color),
+                                             target_size=(args.rows, args.cols),
+                                             batch_size=args.batch,
+                                             class_mode='categorical')
+
+def parse_args():
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-r', '--rows', default=400, type=int,
+                        help='Number of rows per image')
+    parser.add_argument('-c', '--cols', default=56, type=int,
+                        help='Number of columns per image')
+    parser.add_argument('-e', '--epochs', default=30, type=int,
+                        help='Number of training iterations')
+    parser.add_argument('-b', '--batch', default=30, type=int,
+                        help='Size of a training batch')
+    parser.add_argument('-1', '--convelution1', default=32, type=int,
+                        help='Number of convelutional layers')
+    parser.add_argument('-2', '--convelution2', default=128, type=int,
+                        help='Number of convelutional layers')
+    parser.add_argument('-o', '--color', action='store_true',
+                        help='Data is color image')
+    parser.add_argument('data_path', nargs='?',
+                        type=data_dir_path, help='Data directory',
+                        default="%s/../data" % os.path.dirname(sys.argv[0]))
+    parser.add_argument('--version', action='version', version='%(prog)s 1.1')
+    return parser.parse_args()
 
 #Start
-train_data_path = '../data/train'
-test_data_path = '../data/validation'
-img_rows = 255
-img_cols = 56
-epochs = 30
-batch_size = 30
-num_of_train_samples = 366
-num_of_test_samples = 144
-convFilter1 = 128
+args = parse_args()
+bins = os.listdir(train_dir(args.data_path))
+train_dir_path = train_dir(args.data_path)
+test_dir_path = test_dir(args.data_path)
+num_of_train_samples = 0
+num_of_test_samples = 0
+for b in bins:
+    num_of_train_samples += len(os.listdir("%s/%s" % (train_dir_path, b)))
+    num_of_test_samples += len(os.listdir("%s/%s" % (test_dir_path, b)))
 
-input_shape = (img_rows, img_cols, 1)
+input_shape = (args.rows, args.cols, 1)
 
 #Image Generator
 train_datagen = ImageDataGenerator()
 
 test_datagen = ImageDataGenerator()
-
-train_generator = train_datagen.flow_from_directory(train_data_path,
-                                                    color_mode='grayscale',
-                                                    target_size=(img_rows, img_cols),
-                                                    batch_size=batch_size,
-                                                    class_mode='categorical')
-
-validation_generator = test_datagen.flow_from_directory(test_data_path,
-                                                        color_mode='grayscale',
-                                                        target_size=(img_rows, img_cols),
-                                                        batch_size=batch_size,
-                                                        class_mode='categorical')
+train_generator = data_generator(args, train_dir_path)
+validation_generator = data_generator(args, test_dir_path)
 
 # Build model
 model = Sequential()
 
-model.add(Conv2D(filters=32,
+model.add(Conv2D(filters=args.convelution1,
                  kernel_size=(5,5),
                  input_shape=input_shape,
                  padding='valid',
@@ -54,7 +96,7 @@ model.add(Conv2D(filters=32,
 model.add(MaxPooling2D(pool_size=(2,2)))
 model.add(Dropout(.15))
 
-model.add(Conv2D(filters=convFilter1,
+model.add(Conv2D(filters=args.convelution2,
                  kernel_size=(5,5),
                  padding='valid',
                  activation='tanh',
@@ -63,7 +105,7 @@ model.add(Conv2D(filters=convFilter1,
 model.add(MaxPooling2D(pool_size=(2,2)))
 model.add(Dropout(.10))
 
-model.add(Reshape((convFilter1,-1)))
+model.add(Reshape((args.convelution2,-1)))
 model.add(Permute((2,1)))
 model.add(Bidirectional(LSTM(128)))
 model.add(Dense(5, activation='softmax'))
@@ -82,11 +124,11 @@ plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=T
 
 #Train
 history = model.fit_generator(train_generator,
-                    steps_per_epoch=num_of_train_samples // batch_size,
-                    epochs=epochs,
+                    steps_per_epoch=num_of_train_samples // args.batch,
+                    epochs=args.epochs,
                     callbacks=callbacks_list,
                     validation_data=validation_generator,
-                    validation_steps=num_of_test_samples // batch_size)
+                    validation_steps=num_of_test_samples // args.batch)
 
 #History for accuracy
 plt.plot(history.history['acc'])
