@@ -1,9 +1,12 @@
 #! /bin/bash
 
-if [ $# -lt 1 ]; then
+if [ $# -lt 2 -o -f $2 ]; then
     echo "Usage: $0 <data dir> <label> [<pngs> ...]" 1>&2
     echo "If no pngs are provided, then they are assumed to be in the current" 1>&2
     echo "directory." 1>&2
+    if [ -f $2 ]; then
+        echo "Argument two should be a label, not a file name." 1>&2
+    fi
     exit 1
 fi
 

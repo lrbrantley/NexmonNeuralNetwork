@@ -29,7 +29,7 @@ processfile() {
     label=$(echo "$base" | cut -d_ -f1)
     "$CSI_PARSER" "$pcap" "$dir/$base.csv"
     "$CSV_PARSER" "$dir/$base.csv" "$dir/$base-%d.png"
-    "$DATA_SPLITER" "$DATA_DIR" "$dir/$base"-*.png
+    "$DATA_SPLITER" "$DATA_DIR" "$label" "$dir/$base"-*.png
 }
 
 #i=0
