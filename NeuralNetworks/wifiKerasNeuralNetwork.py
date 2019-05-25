@@ -109,7 +109,7 @@ model.add(Dropout(.10))# TODO: Parameterize
 model.add(Reshape((args.convolution2,-1)))
 model.add(Permute((2,1)))
 model.add(Bidirectional(LSTM(128)))# TODO: Parameterize
-model.add(Dense(len(bins)), activation='softmax'))
+model.add(Dense(len(bins), activation='softmax'))
 
 model.summary()
 
