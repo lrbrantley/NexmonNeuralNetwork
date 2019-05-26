@@ -44,6 +44,8 @@ def data_generator(args, directory):
 def parse_args():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-f', '--flags', action="store_true",
+                        help='Print arguments')
     parser.add_argument('-r', '--rows', default=400, type=int,
                         help='Number of rows per image')
     parser.add_argument('-c', '--cols', default=56, type=int,
@@ -58,6 +60,10 @@ def parse_args():
                         help='Number of convolutional layers')
     parser.add_argument('-o', '--color', action='store_true',
                         help='Data is color image')
+    parser.add_argument('-g', '--no-graphs', dest="graphs", action='store_false',
+                        help='Do not show graphs once processing completes.')
+    parser.add_argument('-v', '--verbose', action='count',
+                        help='Print more or less information.')
     parser.add_argument('data_path', nargs='?',
                         type=data_dir_path, help='Data directory',
                         default="%s/../data" % os.path.dirname(sys.argv[0]))
@@ -66,6 +72,8 @@ def parse_args():
 
 #Start
 args = parse_args()
+if args.flags:
+    print(' '.join(sys.argv[1:]))
 bins = os.listdir(train_dir(args.data_path))
 train_dir_path = train_dir(args.data_path)
 test_dir_path = test_dir(args.data_path)
@@ -129,24 +137,32 @@ plot_model(model, to_file='model_plot.png', show_shapes=True,
 history = model.fit_generator(train_generator,
                     steps_per_epoch=num_of_train_samples // args.batch,
                     epochs=args.epochs,
+                    verbose=args.verbose,
                     callbacks=callbacks_list,
                     validation_data=validation_generator,
                     validation_steps=num_of_test_samples // args.batch)
 
-#History for accuracy
-plt.plot(history.history['acc'])
-plt.plot(history.history['val_acc'])
-plt.title('model accuracy')
-plt.ylabel('accuracy')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
+score = model.evaluate_generator(validation_generator,
+                                 num_of_test_samples // args.batch)
+print("\nFinal score: %f" % score[1])
+print("\nFinal score: %f" % score[1])
+#print(score)
 
-#History for accuracy
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('model loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
+if args.graphs:
+    #History for accuracy
+    plt.plot(history.history['acc'])
+    plt.plot(history.history['val_acc'])
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.show()
+    
+    #History for accuracy
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.show()
