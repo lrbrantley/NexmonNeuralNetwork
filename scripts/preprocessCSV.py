@@ -7,6 +7,7 @@ import numpy as np
 import os
 import imageio
 import argparse
+import sys
 
 def parse_args():
         parser = argparse.ArgumentParser(
@@ -20,23 +21,36 @@ def parse_args():
                 args.outformat = "%s-%%d.png" % name
         return args
 
-def scale_row(row):
-        # TODO: Parameterize columns taken
-        trimmed = row[3:31]+row[38:65]
-        # TODO: Error if column count wrong
-        #print(trimmed)
-        floats = [float(s.replace('(', '').replace('+0j)', '').replace('0j', '0'))
-                  for s in trimmed]
-        minV = -min(floats)
-        scale = 255/(max(floats) + minV)
-        return [int((i + minV)*scale) for i in floats]
+def complex_to_float(c):
+        return float(c.replace('(', '').replace('+0j)', '').replace('0j', '0'))
+
+def read_file_floats(inFile):
+        out = []
+        minV = sys.maxint
+        maxV = -minV
+        for row in csv.reader(inFile):
+                # TODO: Parameterize columns taken
+                trimmed = row[3:31]+row[38:65]
+                # TODO: Error if column count wrong
+                floats = [complex_to_float(s) for s in trimmed]
+                out.append(floats)
+                minV = min(min(floats), minV)
+                maxV = max(max(floats), maxV)
+        return (out, minV, maxV)
+
+def scale_row(dat, minV, maxV):
+        offset=-minV
+        scale=255/(maxV + offset)
+        return [int((i + offset)*scale) for i in dat]
 
 def preprocess_file(inFile, outFormat):
         i = 1
         out = []
-        for row in csv.reader(inFile):
-                out.append(scale_row(row))
-                if len(out) >= 400:
+        data, minV, maxV = read_file_floats(inFile)
+        for row in data:
+                out.append(scale_row(row, minV, maxV))
+                # TODO: Parmaterize
+                if len(out) >= 30: #400:
                         imageio.imwrite(outFormat % i,
                                         np.array(out, dtype=np.uint8))
                         i += 1
