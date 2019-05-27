@@ -16,6 +16,7 @@ from keras.layers.normalization import BatchNormalization
 import sys
 import os
 import argparse
+from collections import Iterable
 
 def train_dir(data_dir):
     return '%s/train' % data_dir
@@ -28,9 +29,9 @@ def color_mode(b):
 
 def data_dir_path(string):
     if not os.path.isdir(train_dir(string)):
-        raise NotADirectoryError(train_dir(string))
+        raise ValueError("No such directory %s" % train_dir(string))
     elif not os.path.isdir(test_dir(string)):
-        raise NotADirectoryError(test_dir(string))
+        raise ValueError("No such directory %s" % test_dir(string))
     else:
         return string
 
@@ -41,34 +42,123 @@ def data_generator(args, directory):
                                              batch_size=args.batch,
                                              class_mode='categorical')
 
+def get_arg_index(flag, longFlag=None, argv=sys.argv):
+    try:
+        flagI = argv.index(flag)
+        try:
+            argv.index(longFlag)
+            raise ValueError("Flags %s and %s are mutually exclusive." %
+                             (flag, longFlag))
+        except:
+            return flagI
+    except:
+        try:
+            return argv.index(longFlag)
+        except:
+            return -1
+
+def match_tuple(arg, convolutionFlags):
+    for t in convolutionFlags:
+        if arg in t[:2]:
+            return t
+    return None
+
+def get_convolution_args(out, flag, longFlag, convFlags, argv=sys.argv):
+    i = get_arg_index(flag, longFlag, argv)
+    n = argparse.Namespace()
+    d = vars(n)
+    for t in convFlags:
+        if len(t) >= 5:
+            d[t[2]] = t[4]
+        else:
+            d[t[2]] = None
+    if i != -1:
+        argv = argv[:i]+argv[i+1:]
+        t = match_tuple(argv[i], convFlags)
+        while t is not None:
+            if callable(t[3]):
+                d[t[2]] = t[3](argv[i+1])
+            elif isinstance(t[3], Iterable):
+                if argv[i+1] in t[3]:
+                    d[t[2]] = argv[i+1]
+                else:
+                    raise ValueError("%s is not a valid argument for %s",
+                                     (argv[i+1], argv[i]))
+            else:
+                d[t[2]] = argv[i+1]
+            argv = argv[:i] + argv[i+2:]
+            if i < len(argv):
+                t = match_tuple(argv[i], convFlags)
+            else:
+                t = None
+    vars(out)[longFlag[2:]] = n
+    return argv
+
+def to_tuple(s):
+    try:
+        return int(s)
+    except:
+        v = s.split(",")
+        if len(v) != 2:
+            raise ValueError("%s is not a valid kernel size" % s)
+        return (int(v[0]), int(v[1]))
+
+convArgHelp="""convolution arguments:
+  each convolution can be provided additional arguments
+
+  convolutions:
+    -1 --conv1 [convolution options] first convolution layer
+    -2 --conv2 [convolution options] second convolution layer
+
+  convolution options:
+    -l --filters FILTERS number of convolution filters (default 30/128)
+    -a --activation FN   activation function {"softmax", "elu",
+       "selu", "softplus", "softsign", "relu", "tanh", "sigmoid",
+       "hard_sigmoid", "exponential", "linear"} (default: tanh)
+    -k --kernel SIZE     size of kernel (default: 5,5)
+    -p --pool SIZE       size of pool (default: 2,2)
+    -d --dropout RATE    dropout percentage (default: 0.15/0.10)
+"""
 def parse_args():
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    activate_fns = ["softmax", "elu", "selu", "softplus", "softsign", "relu",
+                    "tanh", "sigmoid", "hard_sigmoid", "exponential", "linear"]
+    convFlags = [
+        ("-l", "--filters", "layers", int, 30),
+        ("-a", "--activation", "activeFn", activate_fns, "tanh"),
+        ("-k", "--kernel", "kernel", to_tuple, (5, 5)),
+        ("-p", "--pool", "pool", to_tuple, (2, 2)),
+        ("-d", "--dropout", "dropout", float, 0.15)
+    ]
+    parser = argparse.ArgumentParser(epilog=convArgHelp,
+        formatter_class=argparse.RawTextHelpFormatter)
+    optimizers=["sgd", "rmsprop", "adagrad", "adadelta", "adam", "adamax", "nadam"]
     parser.add_argument('-f', '--flags', action="store_true",
-                        help='Print arguments')
+                        help='print arguments')
     parser.add_argument('-r', '--rows', default=400, type=int,
-                        help='Number of rows per image')
+                        help='number of rows per image')
     parser.add_argument('-c', '--cols', default=56, type=int,
-                        help='Number of columns per image')
+                        help='number of columns per image')
     parser.add_argument('-e', '--epochs', default=30, type=int,
-                        help='Number of training iterations')
+                        help='number of training iterations')
     parser.add_argument('-b', '--batch', default=30, type=int,
-                        help='Size of a training batch')
-    parser.add_argument('-1', '--convolution1', default=32, type=int,
-                        help='Number of convolutional layers')
-    parser.add_argument('-2', '--convolution2', default=128, type=int,
-                        help='Number of convolutional layers')
-    parser.add_argument('-o', '--color', action='store_true',
-                        help='Data is color image')
+                        help='size of a training batch')
+    parser.add_argument('--color', action='store_true', help='Data is color image')
+    parser.add_argument('-o', '--optimizer', choices=optimizers, default='rmsprop',
+                        help='optimize function')
     parser.add_argument('-g', '--no-graphs', dest="graphs", action='store_false',
-                        help='Do not show graphs once processing completes.')
+                        help='do not show graphs once processing completes.')
     parser.add_argument('-v', '--verbose', action='count',
-                        help='Print more or less information.')
+                        help='print more or less information.')
     parser.add_argument('data_path', nargs='?',
                         type=data_dir_path, help='Data directory',
                         default="%s/../data" % os.path.dirname(sys.argv[0]))
     parser.add_argument('--version', action='version', version='%(prog)s 1.1')
-    return parser.parse_args()
+    n = argparse.Namespace()
+    argv = get_convolution_args(n, "-1", "--conv1", convFlags, sys.argv)
+    convFlags[0] = ("-l", "--layers", "layers", int, 128)
+    convFlags[4] = ("-d", "--dropout", "dropout", float, 0.1)
+    argv = get_convolution_args(n, "-2", "--conv2", convFlags, argv)
+    return parser.parse_args(args=argv[1:], namespace=n)
 
 #Start
 args = parse_args()
@@ -95,26 +185,26 @@ validation_generator = data_generator(args, test_dir_path)
 # Build model
 model = Sequential()
 
-model.add(Conv2D(filters=args.convolution1,
-                 kernel_size=(5,5),# TODO: Parameterize
+model.add(Conv2D(filters=args.conv1.layers,
+                 kernel_size=args.conv1.kernel,
                  input_shape=input_shape,
                  padding='valid',
-                 activation='tanh',# TODO: Parameterize
+                 activation=args.conv1.activeFn,
                  strides=1))
 
-model.add(MaxPooling2D(pool_size=(2,2)))# TODO: Parameterize
-model.add(Dropout(.15))# TODO: Parameterize
+model.add(MaxPooling2D(pool_size=args.conv1.pool))
+model.add(Dropout(args.conv1.dropout))
 
-model.add(Conv2D(filters=args.convolution2,
-                 kernel_size=(5,5),# TODO: Parameterize
+model.add(Conv2D(filters=args.conv2.layers,
+                 kernel_size=args.conv2.kernel,
                  padding='valid',
-                 activation='tanh',# TODO: Parameterize
+                 activation=args.conv2.activeFn,
                  strides=1))
 
-model.add(MaxPooling2D(pool_size=(2,2)))# TODO: Parameterize
-model.add(Dropout(.10))# TODO: Parameterize
+model.add(MaxPooling2D(pool_size=args.conv2.pool))
+model.add(Dropout(args.conv2.dropout))
 
-model.add(Reshape((args.convolution2,-1)))
+model.add(Reshape((args.conv2.layers,-1)))
 model.add(Permute((2,1)))
 model.add(Bidirectional(LSTM(128)))# TODO: Parameterize
 model.add(Dense(len(bins), activation='softmax'))
@@ -122,7 +212,7 @@ model.add(Dense(len(bins), activation='softmax'))
 model.summary()
 
 model.compile(loss='categorical_crossentropy',
-              optimizer='rmsprop',# TODO: Parameterize
+              optimizer=args.optimizer,
               metrics=['accuracy'])
 
 filepath="weights.best.hdf5"
@@ -145,8 +235,6 @@ history = model.fit_generator(train_generator,
 score = model.evaluate_generator(validation_generator,
                                  num_of_test_samples // args.batch)
 print("\nFinal score: %f" % score[1])
-print("\nFinal score: %f" % score[1])
-#print(score)
 
 if args.graphs:
     #History for accuracy
