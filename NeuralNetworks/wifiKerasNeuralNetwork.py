@@ -149,6 +149,11 @@ def parse_args(argv):
     parser.add_argument('--color', action='store_true', help='Data is color image')
     parser.add_argument('-o', '--optimizer', choices=optimizers, default='rmsprop',
                         help='optimize function')
+    parser.add_argument('-w', '--weights', type=argparse.FileType('w'),
+                        default='weights.best.hdf5',
+    parser.add_argument('-m', '--model', type=argparse.FileType('w'),
+                        default='model_plot.png',
+                        help='Output file for model.')
     parser.add_argument('-g', '--no-graphs', dest="graphs", action='store_false',
                         help='do not show graphs once processing completes.')
     parser.add_argument('-v', '--verbose', action='count',
@@ -224,12 +229,11 @@ def run(argv=sys.argv):
                   optimizer=args.optimizer,
                   metrics=['accuracy'])
 
-    filepath="weights.best.hdf5"
-    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1,
+    checkpoint = ModelCheckpoint(args.weights, monitor='val_acc', verbose=1,
                                  save_best_only=True, mode='max')
     callbacks_list=[checkpoint]
     
-    plot_model(model, to_file='model_plot.png', show_shapes=True,
+    plot_model(model, to_file=args.model, show_shapes=True,
                show_layer_names=True)
 
     #Train
