@@ -18,6 +18,11 @@ import os
 import argparse
 from collections import Iterable
 
+optimizers = ["sgd", "rmsprop", "adagrad", "adadelta", "adam", "adamax", "nadam"]
+
+activate_fns = ["softmax", "elu", "selu", "softplus", "softsign", "relu",
+                "tanh", "sigmoid", "hard_sigmoid", "exponential", "linear"]
+
 def train_dir(data_dir):
     return '%s/train' % data_dir
 
@@ -36,11 +41,12 @@ def data_dir_path(string):
         return string
 
 def data_generator(args, directory):
-    return train_datagen.flow_from_directory(directory,
-                                             color_mode=color_mode(args.color),
-                                             target_size=(args.rows, args.cols),
-                                             batch_size=args.batch,
-                                             class_mode='categorical')
+    return ImageDataGenerator() \
+        .flow_from_directory(directory,
+                             color_mode=color_mode(args.color),
+                             target_size=(args.rows, args.cols),
+                             batch_size=args.batch,
+                             class_mode='categorical')
 
 def get_arg_index(flag, longFlag=None, argv=sys.argv):
     try:
@@ -63,6 +69,7 @@ def match_tuple(arg, convolutionFlags):
             return t
     return None
 
+# TODO: This function is rather messy
 def get_convolution_args(out, flag, longFlag, convFlags, argv=sys.argv):
     i = get_arg_index(flag, longFlag, argv)
     n = argparse.Namespace()
@@ -82,7 +89,7 @@ def get_convolution_args(out, flag, longFlag, convFlags, argv=sys.argv):
                 if argv[i+1] in t[3]:
                     d[t[2]] = argv[i+1]
                 else:
-                    raise ValueError("%s is not a valid argument for %s",
+                    raise ValueError("%s is not a valid argument for %s" %
                                      (argv[i+1], argv[i]))
             else:
                 d[t[2]] = argv[i+1]
@@ -119,11 +126,9 @@ convArgHelp="""convolution arguments:
     -p --pool SIZE       size of pool (default: 2,2)
     -d --dropout RATE    dropout percentage (default: 0.15/0.10)
 """
-def parse_args():
-    activate_fns = ["softmax", "elu", "selu", "softplus", "softsign", "relu",
-                    "tanh", "sigmoid", "hard_sigmoid", "exponential", "linear"]
+def parse_args(argv):
     convFlags = [
-        ("-l", "--filters", "layers", int, 30),
+        ("-l", "--filters", "layers", int, 32),
         ("-a", "--activation", "activeFn", activate_fns, "tanh"),
         ("-k", "--kernel", "kernel", to_tuple, (5, 5)),
         ("-p", "--pool", "pool", to_tuple, (2, 2)),
@@ -131,7 +136,6 @@ def parse_args():
     ]
     parser = argparse.ArgumentParser(epilog=convArgHelp,
         formatter_class=argparse.RawTextHelpFormatter)
-    optimizers=["sgd", "rmsprop", "adagrad", "adadelta", "adam", "adamax", "nadam"]
     parser.add_argument('-f', '--flags', action="store_true",
                         help='print arguments')
     parser.add_argument('-r', '--rows', default=400, type=int,
@@ -154,103 +158,113 @@ def parse_args():
                         default="%s/../data" % os.path.dirname(sys.argv[0]))
     parser.add_argument('--version', action='version', version='%(prog)s 1.1')
     n = argparse.Namespace()
-    argv = get_convolution_args(n, "-1", "--conv1", convFlags, sys.argv)
+    argv = get_convolution_args(n, "-1", "--conv1", convFlags, argv)
     convFlags[0] = ("-l", "--layers", "layers", int, 128)
     convFlags[4] = ("-d", "--dropout", "dropout", float, 0.1)
     argv = get_convolution_args(n, "-2", "--conv2", convFlags, argv)
     return parser.parse_args(args=argv[1:], namespace=n)
 
+def build_model(args):
+    # Build model
+    model = Sequential()
+    model.add(Conv2D(filters=args.conv1.layers,
+                     kernel_size=args.conv1.kernel,
+                     input_shape=(args.rows, args.cols, 1),
+                     padding='valid',
+                     activation=args.conv1.activeFn,
+                     strides=1))
+
+    if args.conv1.pool != (1, 1):
+        model.add(MaxPooling2D(pool_size=args.conv1.pool))
+    if args.conv1.dropout != 0:
+        model.add(Dropout(args.conv1.dropout))
+
+    if args.conv2.layers != 0:
+        model.add(Conv2D(filters=args.conv2.layers,
+                         kernel_size=args.conv2.kernel,
+                         padding='valid',
+                         activation=args.conv2.activeFn,
+                         strides=1))
+        if args.conv2.pool != (1, 1):
+            model.add(MaxPooling2D(pool_size=args.conv2.pool))
+        if args.conv2.dropout != 0:
+            model.add(Dropout(args.conv2.dropout))
+        model.add(Reshape((args.conv2.layers,-1)))
+    else:
+        model.add(Reshape((args.conv1.layers,-1)))
+    model.add(Permute((2,1)))
+    model.add(Bidirectional(LSTM(128)))# TODO: Parameterize
+    model.add(Dense(len(os.listdir(train_dir(args.data_path))),
+                    activation='softmax'))
+    return model
 #Start
-args = parse_args()
-if args.flags:
-    print(' '.join(sys.argv[1:]))
-bins = os.listdir(train_dir(args.data_path))
-train_dir_path = train_dir(args.data_path)
-test_dir_path = test_dir(args.data_path)
-num_of_train_samples = 0
-num_of_test_samples = 0
-for b in bins:
-    num_of_train_samples += len(os.listdir("%s/%s" % (train_dir_path, b)))
-    num_of_test_samples += len(os.listdir("%s/%s" % (test_dir_path, b)))
+def run(argv=sys.argv):
+    args = parse_args(argv)
+    if args.flags:
+        print(' '.join(argv[1:]))
+    bins = os.listdir(train_dir(args.data_path))
+    train_dir_path = train_dir(args.data_path)
+    test_dir_path = test_dir(args.data_path)
+    num_of_train_samples = 0
+    num_of_test_samples = 0
+    for b in bins:
+        num_of_train_samples += len(os.listdir("%s/%s" % (train_dir_path, b)))
+        num_of_test_samples += len(os.listdir("%s/%s" % (test_dir_path, b)))
 
-input_shape = (args.rows, args.cols, 1)
-
-#Image Generator
-train_datagen = ImageDataGenerator()
-
-test_datagen = ImageDataGenerator()
-train_generator = data_generator(args, train_dir_path)
-validation_generator = data_generator(args, test_dir_path)
-
-# Build model
-model = Sequential()
-
-model.add(Conv2D(filters=args.conv1.layers,
-                 kernel_size=args.conv1.kernel,
-                 input_shape=input_shape,
-                 padding='valid',
-                 activation=args.conv1.activeFn,
-                 strides=1))
-
-model.add(MaxPooling2D(pool_size=args.conv1.pool))
-model.add(Dropout(args.conv1.dropout))
-
-model.add(Conv2D(filters=args.conv2.layers,
-                 kernel_size=args.conv2.kernel,
-                 padding='valid',
-                 activation=args.conv2.activeFn,
-                 strides=1))
-
-model.add(MaxPooling2D(pool_size=args.conv2.pool))
-model.add(Dropout(args.conv2.dropout))
-
-model.add(Reshape((args.conv2.layers,-1)))
-model.add(Permute((2,1)))
-model.add(Bidirectional(LSTM(128)))# TODO: Parameterize
-model.add(Dense(len(bins), activation='softmax'))
-
-model.summary()
-
-model.compile(loss='categorical_crossentropy',
-              optimizer=args.optimizer,
-              metrics=['accuracy'])
-
-filepath="weights.best.hdf5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1,
-                             save_best_only=True, mode='max')
-callbacks_list=[checkpoint]
-
-plot_model(model, to_file='model_plot.png', show_shapes=True,
-           show_layer_names=True)
-
-#Train
-history = model.fit_generator(train_generator,
-                    steps_per_epoch=num_of_train_samples // args.batch,
-                    epochs=args.epochs,
-                    verbose=args.verbose,
-                    callbacks=callbacks_list,
-                    validation_data=validation_generator,
-                    validation_steps=num_of_test_samples // args.batch)
-
-score = model.evaluate_generator(validation_generator,
-                                 num_of_test_samples // args.batch)
-print("\nFinal score: %f" % score[1])
-
-if args.graphs:
-    #History for accuracy
-    plt.plot(history.history['acc'])
-    plt.plot(history.history['val_acc'])
-    plt.title('model accuracy')
-    plt.ylabel('accuracy')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.show()
+    #Image Generator
+    train_generator = data_generator(args, train_dir_path)
+    validation_generator = data_generator(args, test_dir_path)
     
-    #History for accuracy
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.show()
+    # Build model
+    model = build_model(args)
+
+    model.summary()
+    
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=args.optimizer,
+                  metrics=['accuracy'])
+
+    filepath="weights.best.hdf5"
+    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1,
+                                 save_best_only=True, mode='max')
+    callbacks_list=[checkpoint]
+    
+    plot_model(model, to_file='model_plot.png', show_shapes=True,
+               show_layer_names=True)
+
+    #Train
+    history = model\
+              .fit_generator(train_generator,
+                             steps_per_epoch=num_of_train_samples // args.batch,
+                             epochs=args.epochs,
+                             verbose=args.verbose,
+                             callbacks=callbacks_list,
+                             validation_data=validation_generator,
+                             validation_steps=num_of_test_samples // args.batch)
+
+    if args.graphs:
+        #History for accuracy
+        plt.plot(history.history['acc'])
+        plt.plot(history.history['val_acc'])
+        plt.title('model accuracy')
+        plt.ylabel('accuracy')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.show()
+    
+        #History for accuracy
+        plt.plot(history.history['loss'])
+        plt.plot(history.history['val_loss'])
+        plt.title('model loss')
+        plt.ylabel('loss')
+        plt.xlabel('epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.show()
+    
+    #print("\nFinal score: %f" % score[1])
+    # TODO: Fix hardcoded index to use model.metrics_names
+    return model.evaluate_generator(validation_generator,
+                                    num_of_test_samples,
+                                    use_multiprocessing=True)[1]
+if __name__ == "__main__":
+    run()
