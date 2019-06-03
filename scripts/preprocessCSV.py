@@ -17,7 +17,7 @@ def parse_args():
         parser.add_argument('--version', action='version', version='%(prog)s 1.1')
         args = parser.parse_args()
         if args.outformat is None:
-                name, ext = path.splitext(args.csv)
+                name, ext = path.splitext(args.csv.name)
                 args.outformat = "%s-%%d.png" % name
         return args
 
@@ -55,6 +55,9 @@ def preprocess_file(inFile, outFormat):
                                         np.array(out, dtype=np.uint8))
                         i += 1
                         out = []
+        if i == 1:
+                print("Did not find more than %d rows in file %s." %
+                      (len(out), inFile.name))
 
 if __name__ == "__main__":
         args = parse_args()

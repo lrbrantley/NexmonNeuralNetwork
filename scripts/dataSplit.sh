@@ -1,6 +1,6 @@
 #! /bin/bash
 
-if [ $# -lt 2 -o -f $2 ]; then
+if [ $# -lt 2 -o -f "$2" ]; then
     echo "Usage: $0 <data dir> <label> [<pngs> ...]" 1>&2
     echo "If no pngs are provided, then they are assumed to be in the current" 1>&2
     echo "directory." 1>&2
@@ -26,8 +26,8 @@ for file in $images; do
 	val=$RANDOM
 	let "val %= 100"
 	if test $val -le 70; then
-		mv "$file" "$TRAIN_DIR"
+		cp -l "$file" "$TRAIN_DIR"
 	else
-		mv "$file" "$TEST_DIR"
+		cp -l "$file" "$TEST_DIR"
 	fi
 done
