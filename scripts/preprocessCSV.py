@@ -49,17 +49,29 @@ def data_to_floats(data):
 def float_equ(a, b, E):
         return E > abs(a - b)
 
-# Remove columns which are constant or just increasing by a fixed value
+# Remove columns which increase by a fixed value (including zero)
 def strip_columns(data):
-        EPSILON = 0.7
-        incInd = range(len(data[0]))
-        incs = [data[1][i] - data[0][i] for i in incInd]
+        EPSILON = 2
+        MIN_INCONSISTENCIES = int(len(data)*0.05)
+        predictableInds = range(len(data[0]))
+        inconsistencies = [0]*len(data[0])
+        # Uses first two rows to detect recurring patterns
+        # If a blip happens in first two rows, we're screwed
+        increments = [data[1][i] - data[0][i] for i in predictableInds]
         ref = data[1]
         for row in data[2:]:
-                incInd = [i for i in incInd
-                          if float_equ(row[i], ref[i] + incs[i], EPSILON)]
+                # Make a copy of the array to iterate over while we mutate it
+                for i in predictableInds[:]:
+                        if not float_equ(row[i], ref[i] + increments[i], EPSILON):
+                                inconsistencies[i] += 1
+                                if inconsistencies[i] >= MIN_INCONSISTENCIES:
+                                        predictableInds.remove(i)
                 ref = row
-        rmInd = [i - ind for ind, i in enumerate(incInd)]
+        #print(incInd)
+        # Each time a column is deleted, the indexes shift
+        # Hence each index needs to be decremented by the number of indecies
+        # before it
+        rmInd = [i - ind for ind, i in enumerate(predictableInds)]
         for row in data:
                 for i in rmInd:
                         del row[i]
