@@ -149,10 +149,9 @@ def parse_args(argv):
     parser.add_argument('--color', action='store_true', help='Data is color image')
     parser.add_argument('-o', '--optimizer', choices=optimizers, default='rmsprop',
                         help='optimize function')
-    parser.add_argument('-w', '--weights', type=argparse.FileType('w'),
-                        default='weights.best.hdf5',
-    parser.add_argument('-m', '--model', type=argparse.FileType('w'),
-                        default='model_plot.png',
+    parser.add_argument('-w', '--weights', default='weights.best.hdf5',
+                        help='Output file for weights.')
+    parser.add_argument('-m', '--model', default='model_plot.png',
                         help='Output file for model.')
     parser.add_argument('-g', '--no-graphs', dest="graphs", action='store_false',
                         help='do not show graphs once processing completes.')

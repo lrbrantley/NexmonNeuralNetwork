@@ -32,8 +32,8 @@ readonly CSI_PARSER="$SCRIPT_DIR/csi_parser.py"
 readonly CSV_PARSER="$SCRIPT_DIR/preprocessCSV.py"
 readonly DATA_SPLITER="$SCRIPT_DIR/dataSplit.sh"
 
-readonly PCAP_MINE_TYPE="application/vnd.tcpdump.pcap; charset=binary"
-readonly CSV_MINE_TYPE="text/plain; charset=us-ascii"
+readonly PCAP_MINE_TYPE="application/vnd.tcpdump.pcap"
+readonly CSV_MINE_TYPE="text/plain"
 
 wait_for_cpu_usage()
 {
@@ -48,10 +48,10 @@ processfile() {
     pcap="$1"
     dir="$(dirname $pcap)"
     base=""
-    if [ "$(file -ib "$pcap")" = "$PCAP_MINE_TYPE" ]; then
+    if [ "$(file --mime-type -b "$pcap")" = "$PCAP_MINE_TYPE" ]; then
         base="$(basename $pcap .pcap)"
         nice -n "$NICENESS" "$CSI_PARSER" "$pcap" "$dir/$base.csv"
-    elif [ "$(file -ib "$pcap")" = "$CSV_MINE_TYPE" ]; then
+    elif [ "$(file --mime-type -b "$pcap")" = "$CSV_MINE_TYPE" ]; then
         base="$(basename $pcap .csv)"
     else
         echo "File \"$pcap\" is not a Pcap nor a CSV.  No action to do." 1>&2
