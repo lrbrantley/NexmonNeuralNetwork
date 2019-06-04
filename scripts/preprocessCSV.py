@@ -16,6 +16,8 @@ def parse_args():
         parser.add_argument('outformat', nargs='?', help='Output filename format')
         parser.add_argument('-r', '--rows', default=400, type=int,
                             help='number of rows per image')
+        parser.add_argument('-c', '--columns', default=56, type=int,
+                            help='number of columns per image')
         parser.add_argument('--version', action='version', version='%(prog)s 1.1')
         args = parser.parse_args()
         if args.outformat is None:
@@ -47,19 +49,21 @@ def data_to_floats(data):
 def float_equ(a, b, E):
         return E > abs(a - b)
 
+# Remove columns which are constant or just increasing by a fixed value
 def strip_columns(data):
         EPSILON = 0.7
         incInd = range(len(data[0]))
         incs = [data[1][i] - data[0][i] for i in incInd]
         ref = data[1]
         for row in data[2:]:
-                incInd = [i for i in incInd if float_equ(row[i], ref[i] + incs[i], EPSILON)]
+                incInd = [i for i in incInd
+                          if float_equ(row[i], ref[i] + incs[i], EPSILON)]
                 ref = row
         rmInd = [i - ind for ind, i in enumerate(incInd)]
         for row in data:
                 for i in rmInd:
                         del row[i]
-                        print(row)
+                #print(row)
         return data
 
 def find_boundries(data):
@@ -75,11 +79,13 @@ def scale_row(dat, minV, maxV):
         scale=255/(maxV + offset)
         return [int((i + offset)*scale) for i in dat]
 
-def preprocess_file(inFile, outFormat, rows):
+def preprocess_file(inFile, outFormat, rows, cols):
         i = 1
         out = []
         data = strip_columns(data_to_floats(strip_headers(read_file(inFile))))
-        #print(len(data[0]))
+        if len(data[0]) != cols:
+                raise AssertionError("Expecting %d columns of data, found %d." %
+                                     (cols, len(data[0])))
         minV, maxV = find_boundries(data)
         for row in data:
                 out.append(scale_row(row, minV, maxV))
@@ -89,9 +95,9 @@ def preprocess_file(inFile, outFormat, rows):
                         i += 1
                         out = []
         if i == 1:
-                print("Did not find more than %d rows in file %s." %
+                raise AssertionError("Did not find more than %d rows in file %s." %
                       (len(out), inFile.name))
 
 if __name__ == "__main__":
         args = parse_args()
-        preprocess_file(args.csv, args.outformat, args.rows)
+        preprocess_file(args.csv, args.outformat, args.rows, args.columns)
