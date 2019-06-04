@@ -14,6 +14,8 @@ def parse_args():
                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         parser.add_argument('csv', type=argparse.FileType('r'), help='CSV file')
         parser.add_argument('outformat', nargs='?', help='Output filename format')
+        parser.add_argument('-r', '--rows', default=400, type=int,
+                            help='number of rows per image')
         parser.add_argument('--version', action='version', version='%(prog)s 1.1')
         args = parser.parse_args()
         if args.outformat is None:
@@ -24,33 +26,64 @@ def parse_args():
 def complex_to_float(c):
         return float(c.replace('(', '').replace('+0j)', '').replace('0j', '0'))
 
-def read_file_floats(inFile):
+def read_file(inFile):
         out = []
-        minV = sys.maxint
-        maxV = -minV
         for row in csv.reader(inFile):
-                # TODO: Parameterize columns taken
-                trimmed = row[3:31]+row[38:65]
-                # TODO: Error if column count wrong
-                floats = [complex_to_float(s) for s in trimmed]
-                out.append(floats)
-                minV = min(min(floats), minV)
-                maxV = max(max(floats), maxV)
-        return (out, minV, maxV)
+                out.append(row)
+        return out
+
+def strip_headers(data):
+        if data[0][0] == '':
+                return data[1:]
+        else:
+                return data
+
+def data_to_floats(data):
+        out = []
+        for row in data:
+                out.append([complex_to_float(s) for s in row])
+        return out
+
+def float_equ(a, b, E):
+        return E > abs(a - b)
+
+def strip_columns(data):
+        EPSILON = 0.7
+        incInd = range(len(data[0]))
+        incs = [data[1][i] - data[0][i] for i in incInd]
+        ref = data[1]
+        for row in data[2:]:
+                incInd = [i for i in incInd if float_equ(row[i], ref[i] + incs[i], EPSILON)]
+                ref = row
+        rmInd = [i - ind for ind, i in enumerate(incInd)]
+        for row in data:
+                for i in rmInd:
+                        del row[i]
+                        print(row)
+        return data
+
+def find_boundries(data):
+        minV = min(data[0])
+        maxV = max(data[0])
+        for row in data[1:]:
+                minV = min(min(row), minV)
+                maxV = max(max(row), maxV)
+        return (minV, maxV)
 
 def scale_row(dat, minV, maxV):
         offset=-minV
         scale=255/(maxV + offset)
         return [int((i + offset)*scale) for i in dat]
 
-def preprocess_file(inFile, outFormat):
+def preprocess_file(inFile, outFormat, rows):
         i = 1
         out = []
-        data, minV, maxV = read_file_floats(inFile)
+        data = strip_columns(data_to_floats(strip_headers(read_file(inFile))))
+        #print(len(data[0]))
+        minV, maxV = find_boundries(data)
         for row in data:
                 out.append(scale_row(row, minV, maxV))
-                # TODO: Parmaterize
-                if len(out) >= 30: #400:
+                if len(out) >= rows:
                         imageio.imwrite(outFormat % i,
                                         np.array(out, dtype=np.uint8))
                         i += 1
@@ -61,4 +94,4 @@ def preprocess_file(inFile, outFormat):
 
 if __name__ == "__main__":
         args = parse_args()
-        preprocess_file(args.csv, args.outformat)
+        preprocess_file(args.csv, args.outformat, args.rows)

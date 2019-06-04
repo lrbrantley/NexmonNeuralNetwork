@@ -53,7 +53,6 @@ def parse_binary(csi):
 		val = complex(real, imag)
 		channel[index/4] = abs(val)
 	return channel
-		
 
 def print_csv(packets, csv_file):
 	df = pd.DataFrame()
@@ -73,7 +72,8 @@ def pcap_to_csv(pcap_file, csv_file):
 	packets = pcap.readpkts()
 	udp_packets = grab_udp(packets)
         if len(udp_packets) == 0:
-                raise ValueError("No UDP packets found in file '%s'." % pcap_file.name)
+                raise ValueError("No UDP packets found in file '%s'." %
+                                 pcap_file.name)
 	order_packets(udp_packets)
 	print_csv(udp_packets, csv_file)
 
